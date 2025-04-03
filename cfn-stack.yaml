@@ -1,0 +1,422 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  ClusterName:
+    Type: String
+    Default: "MyCluster"
+  
+  ServiceName:
+    Type: String
+    Default: "cl-service"
+    
+  TaskDefinitionFamily:
+    Type: String
+    Default: "new-task-family"
+
+  Image:
+    Type: String
+    Description: "The image to use in task definition"
+
+  TaskRoleArn:
+    Type: String
+    Default: "arn:aws:iam::711387121692:role/lamp_container_ROLE"
+
+  DBUsername:
+    Type: String
+    Description: "The database master username"
+  
+  DBPassword:
+    Type: String
+    Description: "The database master password"
+    NoEcho: true
+  
+  DBName:
+    Type: String
+    Description: "The name of the initial database to create"
+
+Resources:
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 192.168.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: LAMP-VPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: LAMP-IGW
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MyVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 192.168.16.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PublicSubnet1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 192.168.32.0/20
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PublicSubnet2
+
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 192.168.48.0/20
+      AvailabilityZone: !Select [2, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PublicSubnet3
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 192.168.64.0/20
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 192.168.80.0/20
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet2
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: PublicRouteTable
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet3
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: PrivateRouteTable1
+
+  PrivateSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: PrivateRouteTable2
+
+  PrivateSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  LoadBalancerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Load Balancer security group
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  ContainerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Lamp Container security group
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref LoadBalancerSG
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  RDSSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS security group
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref ContainerSG
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  # Create an Application Load Balancer (ALB)
+  MyALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: lamp-alb
+      Subnets: 
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+        - !Ref PublicSubnet3
+      SecurityGroups:
+        - !Ref LoadBalancerSG
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: "60"
+      Type: application
+      IpAddressType: ipv4
+
+  # Target Group for the Load Balancer
+  MyTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: lamp-target-group
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref MyVPC
+      TargetType: ip
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: "/"
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 3
+
+  # Listener for ALB
+  MyALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref MyTargetGroup
+      LoadBalancerArn: !Ref MyALB
+      Port: 80
+      Protocol: HTTP
+    
+  # Create RDS instance without depending on ECS Task Definition
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: LAMP-DB
+      AllocatedStorage: 20
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBName: !Ref DBName
+      PubliclyAccessible: false
+      StorageType: gp2
+      MultiAZ: true
+      VPCSecurityGroups:
+        - !Ref RDSSG
+      DBSubnetGroupName: !Ref RDSSubnetGroup
+      EnableCloudwatchLogsExports:
+        - "error"
+        - "general"
+        - "slowquery"
+      BackupRetentionPeriod: 0
+      DeletionProtection: false
+
+  # RDS Subnet Group for DB instance
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds: 
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+  # Secrets Manager Secret
+  MyRdsSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: DB_SECRETS
+      SecretString: !Sub |
+        {
+          "DB_USERNAME": "${DBUsername}",
+          "DB_PASSWORD": "${DBPassword}",
+          "DB_NAME": "${DBName}",
+          "DB_HOST": "${RDSInstance.Endpoint.Address}"
+        }
+
+  # ECS Cluster (No dependency on RDS instance)
+  MyCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Ref ClusterName
+
+  # ECS Task Definition with Secrets from Secrets Manager
+  MyTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Ref TaskDefinitionFamily
+      Cpu: 1024
+      Memory: 3072
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: arn:aws:iam::711387121692:role/ecsTaskExecutionRole
+      TaskRoleArn: !Ref TaskRoleArn
+      ContainerDefinitions:
+        - Name: lamp_container
+          Image: !Ref Image
+          Cpu: 1024
+          PortMappings:
+            - Name: container-port
+              ContainerPort: 80
+              HostPort: 80
+              Protocol: tcp
+              AppProtocol: http
+          Essential: true
+          Secrets:
+            - Name: DB_SECRETS
+              ValueFrom: !Ref MyRdsSecret
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - curl -f http://localhost/ || exit 1
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 0
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/lamp-task-family
+              awslogs-region: eu-west-1
+              awslogs-stream-prefix: ecs
+              awslogs-create-group: 'true'
+              max-buffer-size: 25m
+          SystemControls: []
+
+  # ECS Service with Load Balancer
+  MyECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref ClusterName
+      ServiceName: !Ref ServiceName
+      TaskDefinition: !Ref MyTaskDefinition
+      DesiredCount: 2
+      CapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 100
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - !Ref PublicSubnet1
+            - !Ref PublicSubnet2
+            - !Ref PublicSubnet3
+          SecurityGroups:
+            - !Ref ContainerSG
+          AssignPublicIp: ENABLED
+      LoadBalancers:
+        - TargetGroupArn: !Ref MyTargetGroup
+          ContainerName: lamp_container
+          ContainerPort: 80
+      
+
+  
+  Auto Scaling Target for ECS Service
+  CpuScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: 5
+      MinCapacity: 1
+      ResourceId: !Sub "service/${MyCluster}/${MyECSService}"
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  Auto Scaling Policy (ECS Scaling with CPU metrics)
+  CpuScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: CpuScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ServiceNamespace: 'ecs'
+      ScalingTargetId: !Sub "${CpuScalingTarget.ResourceId}|${CpuScalingTarget.ScalableDimension}|${CpuScalingTarget.ServiceNamespace}"
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 60.0
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 300
+
+Outputs:
+  ECSClusterName:
+    Description: "ECS Cluster Name"
+    Value: !Ref MyCluster
+  ECSServiceName:
+    Description: "ECS Service Name"
+    Value: !Ref MyECSService
+  ALBName:
+    Description: "Application Load Balancer Name"
+    Value: !Ref MyALB
+  TargetGroupArn:
+    Description: "Target Group ARN"
+    Value: !Ref MyTargetGroup

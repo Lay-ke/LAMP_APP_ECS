@@ -1,0 +1,14 @@
+.sort-icon {
+    display: inline-block;
+    width: 1em;
+    text-align: center;
+}
+
+.table-header-sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.filter-container {
+    margin-bottom: 1.5rem;
+}

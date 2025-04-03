@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: lamp_app
+    ports:
+      - "80:80"
+    environment:
+      - DB_USERNAME=app_user
+      - DB_NAME=lamp_db
+      - DB_PASSWORD=passworddb
+      - DB_HOST=192.168.49.1
+    volumes:
+      - ./crud_app:/var/www/html/crud_app
+    restart: always
+
