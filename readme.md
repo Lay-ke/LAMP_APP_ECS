@@ -35,6 +35,8 @@ The infrastructure is provisioned using **AWS CloudFormation**, ensuring a robus
 
 ## Architecture
 
+![LAMP Stack Architecture](./LAMP-ECS.png)
+
 The architecture consists of:
 
 - **Network Layer**: Custom VPC with three public subnets and two private subnets across multiple Availability Zones.
