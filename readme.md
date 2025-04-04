@@ -88,7 +88,7 @@ The architecture consists of:
 
 - Custom Docker image built on **PHP 8.2 with Apache**.
 - Contains all necessary PHP extensions for MySQL connectivity.
-- Links: [Dockerfile](https://chatgpt.com/c/67efb164-85c0-8003-9af9-9a8e91a28982#) | [Startup Script](https://chatgpt.com/c/67efb164-85c0-8003-9af9-9a8e91a28982#)
+- Links: [Dockerfile](./Dockerfile) | [Startup Script](./startup.sh)
 
 ### Database Connection
 
